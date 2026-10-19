@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uni Charge - ระบบควบคุมผู้ดูแล (Admin Dashboard)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+<body class="bg-light">
+
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="#"><i class="bi bi-sliders text-warning"></i> Uni Charge Admin Dashboard</a>
+      <span class="navbar-text text-white-50">ระบบจัดการตู้ชาร์จ คณะครุศาสตร์อุตสาหกรรมฯ</span>
+    </div>
+  </nav>
+
+  <div class="container my-4">
+    <!-- Real-time Stats -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card p-3 shadow-sm border-0 text-center">
+          <small class="text-muted">ตู้ชาร์จทั้งหมด</small>
+          <h2 id="totalSlots" class="fw-bold m-0">54</h2>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card p-3 shadow-sm border-0 text-center bg-success text-white">
+          <small>พร้อมใช้งาน (ว่าง)</small>
+          <h2 id="availSlots" class="fw-bold m-0">0</h2>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card p-3 shadow-sm border-0 text-center bg-warning text-dark">
+          <small>กำลังใช้งานอยู่</small>
+          <h2 id="inUseSlots" class="fw-bold m-0">0</h2>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card p-3 shadow-sm border-0 text-center bg-danger text-white">
+          <small>ปิดซ่อมบำรุง</small>
+          <h2 id="maintSlots" class="fw-bold m-0">0</h2>
+        </div>
+      </div>
+    </div>
+
+    <!-- Management Table -->
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold m-0">รายการควบคุมช่องชาร์จทั้งหมด 54 ช่อง</h5>
+        <button class="btn btn-sm btn-outline-primary" onclick="loadAdminData()"><i class="bi bi-arrow-clockwise"></i> อัปเดตข้อมูล</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>ลำดับ</th>
+              <th>ช่องชาร์จ</th>
+              <th>สถานที่/อาคาร</th>
+              <th>ประเภทสาย</th>
+              <th>สถานะ</th>
+              <th>ผู้ใช้งาน</th>
+              <th>การจัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="adminTable">
+            <!-- Filled by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', loadAdminData);
+
+    async function loadAdminData() {
+      const res = await fetch('/api/slots');
+      const data = await res.json();
+      
+      let avail = 0, inuse = 0, maint = 0;
+      const tbody = document.getElementById('adminTable');
+      tbody.innerHTML = '';
+
+      data.forEach(s => {
+        if (s.status === 'ว่าง') avail++;
+        else if (s.status === 'มีผู้จองแล้ว') inuse++;
+        else maint++;
+
+        tbody.innerHTML += `
+          <tr>
+            <td>${s.rowIndex}</td>
+            <td class="fw-bold">ช่อง ${s.slotNumber}</td>
+            <td class="small">${s.location}</td>
+            <td><span class="badge bg-light text-dark border">${s.cableType}</span></td>
+            <td>
+              <span class="badge ${s.status==='ว่าง'?'bg-success':s.status==='มีผู้จองแล้ว'?'bg-warning text-dark':'bg-danger'}">
+                ${s.status}
+              </span>
+            </td>
+            <td class="small">${s.bookedBy ? `${s.bookedBy}<br><span class="text-muted">${s.bookedEmail}</span>` : '-'}</td>
+            <td>
+              ${s.status === 'ปิดซ่อม' ? 
+                `<button class="btn btn-sm btn-success" onclick="updateStatus(${s.rowIndex}, 'ว่าง')">เปิดใช้งาน</button>` : 
+                `<button class="btn btn-sm btn-outline-danger" onclick="updateStatus(${s.rowIndex}, 'ปิดซ่อม')">ปิดซ่อมบำรุง</button>`
+              }
+              <button class="btn btn-sm btn-light border" onclick="updateStatus(${s.rowIndex}, 'ว่าง')">รีเซ็ต</button>
+            </td>
+          </tr>
+        `;
+      });
+
+      document.getElementById('availSlots').innerText = avail;
+      document.getElementById('inUseSlots').innerText = inuse;
+      document.getElementById('maintSlots').innerText = maint;
+    }
+
+    async function updateStatus(rowIndex, newStatus) {
+      await fetch('/api/admin/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rowIndex, newStatus })
+      });
+      loadAdminData();
+    }
+  </script>
+</body>
+</html>

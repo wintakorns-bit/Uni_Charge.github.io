@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uni Charge - ตู้ชาร์จแบตอัจฉริยะ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <style>
+    body { background-color: #f4f7f6; font-family: 'Segoe UI', Thonburi, sans-serif; }
+    .header-bg { background: linear-gradient(135deg, #0d6efd, #0dcaf0); color: white; padding: 24px 0; shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .building-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    .btn-floor { border-radius: 20px; font-weight: 600; margin: 3px; }
+    .status-ว่าง { background-color: #198754; color: white; }
+    .status-มีผู้จองแล้ว { background-color: #ffc107; color: #000; }
+    .status-ปิดซ่อม { background-color: #dc3545; color: white; }
+    .card-slot { border-radius: 14px; border: 1px solid #e9ecef; transition: transform 0.2s; }
+    .card-slot:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.08); }
+    .timer-badge { font-size: 1.5rem; font-family: monospace; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header-bg text-center mb-4">
+    <div class="container d-flex justify-between align-items-center flex-wrap">
+      <div class="text-start">
+        <h2 class="fw-bold m-0"><i class="bi bi-lightning-charge-fill text-warning"></i> Uni Charge (ยูนิชาร์จ)</h2>
+        <p class="m-0 text-white-50">คณะครุศาสตร์อุตสาหกรรมและเทคโนโลยี | ค่าบริการ 20 บาท/ชม.</p>
+      </div>
+      <div id="userAuthSection" class="mt-2 mt-md-0">
+        <!-- Auth state filled by JS -->
+      </div>
+    </div>
+  </div>
+
+  <div class="container mb-5">
+    
+    <!-- Active Charging Banner -->
+    <div id="activeTimerBanner" class="alert alert-success d-none shadow-sm rounded-4 mb-4 p-3">
+      <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+          <span class="badge bg-success mb-1">กำลังใช้งานชาร์จแบตเตอรี่</span>
+          <h5 id="activeSlotTitle" class="fw-bold m-0">ช่องชาร์จ --</h5>
+          <small id="activeSlotLoc" class="text-muted">--</small>
+        </div>
+        <div class="text-center my-2 my-md-0">
+          <small class="text-muted d-block">ระยะเวลาที่ใช้ไป</small>
+          <span id="activeTimer" class="timer-badge text-primary">00:00:00</span>
+        </div>
+        <div>
+          <button class="btn btn-sm btn-outline-primary me-1" onclick="showActiveQR()"><i class="bi bi-qr-code"></i> แสดง QR ปลดล็อก</button>
+          <button class="btn btn-sm btn-danger" onclick="finishCharging()"><i class="bi bi-stop-circle"></i> คืนช่องชาร์จ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floor Filter Map -->
+    <div class="building-card text-center mb-4">
+      <h5 class="fw-bold"><i class="bi bi-geo-alt-fill text-danger"></i> เลือกจุดชาร์จตามตำแหน่ง (54 ช่องชาร์จ)</h5>
+      <div class="d-flex flex-wrap justify-content-center mt-3" id="floorButtons">
+        <button class="btn btn-primary btn-floor" onclick="selectFloor('ALL', this)">ทั้งหมด (54)</button>
+        <button class="btn btn-outline-warning btn-floor" onclick="selectFloor('SHIP', this)">🚢 หัวเรือ ชั้น 1 (6)</button>
+        <button class="btn btn-outline-secondary btn-floor" onclick="selectFloor('FL02', this)">ชั้น 2 (6)</button>
+        <button class="btn btn-outline-secondary btn-floor" onclick="selectFloor('FL03', this)">ชั้น 3 (5)</button>
+        <button class="btn btn-outline-secondary btn-floor" onclick="selectFloor('FL04', this)">ชั้น 4 (6)</button>
+        <button class="btn btn-outline-secondary btn-floor" onclick="selectFloor('FL05', this)">ชั้น 5 (6)</button>
+        <button class="btn btn-outline-secondary btn-floor" onclick="selectFloor('FL06', this)">ชั้น 6 (6)</button>
+        <button class="btn btn-outline-secondary btn-floor" onclick="selectFloor('FL07', this)">ชั้น 7 (6)</button>
+        <button class="btn btn-outline-secondary btn-floor" onclick="selectFloor('FL08', this)">ชั้น 8 (6)</button>
+        <button class="btn btn-outline-secondary btn-floor" onclick="selectFloor('FL09', this)">ชั้น 9 (7)</button>
+      </div>
+    </div>
+
+    <!-- Cable Filter & History Button -->
+    <div class="row mb-3 align-items-center">
+      <div class="col-6 col-md-4">
+        <button class="btn btn-outline-dark rounded-pill" onclick="openHistoryModal()"><i class="bi bi-clock-history"></i> ประวัติการจองของฉัน</button>
+      </div>
+      <div class="col-6 col-md-4 ms-auto">
+        <select id="filterCable" class="form-select rounded-pill" onchange="filterData()">
+          <option value="">-- กรองประเภทสายชาร์จทั้งหมด --</option>
+          <option value="Type-C">🔌 Type-C</option>
+          <option value="Lightning">🔌 Lightning (iPhone)</option>
+          <option value="Micro-USB">🔌 Micro-USB</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Slots Grid Container -->
+    <div id="slotsContainer" class="row">
+      <div class="text-center py-5 text-muted"><div class="spinner-border text-primary" role="status"></div><br>กำลังโหลดข้อมูลจุดชาร์จ...</div>
+    </div>
+  </div>
+
+  <!-- Modal Login -->
+  <div class="modal fade" id="loginModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content p-4 rounded-4 text-center">
+        <h4 class="fw-bold text-primary mb-2"><i class="bi bi-shield-lock"></i> เข้าสู่ระบบนักศึกษา</h4>
+        <p class="text-muted small">ยืนยันตัวตนด้วยบัญชีมหาวิทยาลัยเพื่อใช้งานตู้ชาร์จ</p>
+        <input type="text" id="loginName" class="form-control mb-2 text-center" placeholder="ชื่อ-นามสกุล นักศึกษา">
+        <input type="email" id="loginEmail" class="form-control mb-3 text-center" placeholder="อีเมลมหาวิทยาลัย (@rmutsv.ac.th)">
+        <button class="btn btn-primary w-100 rounded-pill" onclick="saveLogin()">เข้าสู่ระบบ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Booking & Payment -->
+  <div class="modal fade" id="bookingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content p-4 rounded-4">
+        <div id="bookingForm">
+          <h5 class="fw-bold mb-1 text-center">ชำระเงิน & ยืนยันการจอง</h5>
+          <p id="modalSlotDetail" class="fw-bold text-primary text-center mb-3"></p>
+          
+          <div class="bg-light p-3 rounded-3 mb-3">
+            <div class="d-flex justify-content-between mb-1">
+              <span>อัตราค่าบริการ:</span>
+              <span class="fw-bold">20 บาท / ชั่วโมง</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span>ระยะเวลาชาร์จ:</span>
+              <select id="chargeHours" class="form-select form-select-sm w-auto" onchange="calculateTotal()">
+                <option value="1">1 ชั่วโมง (20 บาท)</option>
+                <option value="2">2 ชั่วโมง (40 บาท)</option>
+                <option value="3">3 ชั่วโมง (60 บาท)</option>
+              </select>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between fw-bold text-danger">
+              <span>ยอดชำระทั้งสิ้น:</span>
+              <span id="totalPriceText">20 บาท</span>
+            </div>
+          </div>
+
+          <!-- PromptPay QR Code Mock -->
+          <div class="text-center mb-3">
+            <p class="small text-muted mb-1">สแกนชำระเงินผ่าน PromptPay QR Code</p>
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=PROMPTPAY_20_THB_UNICHARGE" class="img-fluid border p-2 rounded-3" alt="PromptPay QR">
+          </div>
+
+          <button class="btn btn-success w-100 rounded-pill py-2 fw-bold" onclick="confirmPayment()"><i class="bi bi-credit-card"></i> ยืนยันการชำระเงิน & จองทันที</button>
+        </div>
+
+        <div id="qrSection" style="display:none;" class="text-center">
+          <div class="alert alert-success fw-bold">ชำระเงินสำเร็จ! สแกน QR Code ที่ตู้เพื่อเปิดช่องใส่เครื่อง</div>
+          <div id="qrcode" class="d-flex justify-content-center my-3"></div>
+          <p class="small text-muted">ระบบได้รับการบันทึก และส่งอีเมลยืนยันการจองเรียบร้อยแล้ว</p>
+          <button class="btn btn-outline-secondary w-100 rounded-pill" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal History -->
+  <div class="modal fade" id="historyModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content p-4 rounded-4">
+        <h5 class="fw-bold mb-3"><i class="bi bi-clock-history"></i> ประวัติการใช้งานตู้ชาร์จของฉัน</h5>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle text-sm">
+            <thead class="table-light">
+              <tr>
+                <th>ช่องชาร์จ</th>
+                <th>สถานที่</th>
+                <th>เวลาจอง</th>
+                <th>ระยะเวลา</th>
+                <th>ยอดชำระ</th>
+                <th>สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <!-- Filled by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let currentUser = JSON.parse(localStorage.getItem('uniChargeUser')) || null;
+    let allSlots = [];
+    let selectedFloorCode = 'ALL';
+    let activeSlotRowIndex = null;
+    let selectedSlotObj = null;
+    let bookingModalInstance, loginModalInstance, historyModalInstance;
+    let timerInterval = null, secondsElapsed = 0;
+
+    document.addEventListener('DOMContentLoaded', function() {
+      bookingModalInstance = new bootstrap.Modal(document.getElementById('bookingModal'));
+      loginModalInstance = new bootstrap.Modal(document.getElementById('loginModal'));
+      historyModalInstance = new bootstrap.Modal(document.getElementById('historyModal'));
+      
+      updateAuthUI();
+      loadSlots();
+      setInterval(loadSlots, 15000);
+    });
+
+    function updateAuthUI() {
+      const container = document.getElementById('userAuthSection');
+      if (currentUser) {
+        container.innerHTML = `
+          <span class="me-2"><i class="bi bi-person-circle"></i> ${currentUser.name}</span>
+          <button class="btn btn-sm btn-light rounded-pill" onclick="logout()"><i class="bi bi-box-arrow-right"></i> ออกจากระบบ</button>
+        `;
+      } else {
+        container.innerHTML = `
+          <button class="btn btn-sm btn-light rounded-pill font-bold" onclick="openLogin()"><i class="bi bi-person-badge"></i> เข้าสู่ระบบนักศึกษา</button>
+        `;
+      }
+    }
+
+    function openLogin() { loginModalInstance.show(); }
+    
+    function saveLogin() {
+      const name = document.getElementById('loginName').value.trim();
+      const email = document.getElementById('loginEmail').value.trim();
+      if (!name || !email) return alert('กรุณากรอกชื่อและอีเมลมหาวิทยาลัย');
+      currentUser = { name, email };
+      localStorage.setItem('uniChargeUser', JSON.stringify(currentUser));
+      loginModalInstance.hide();
+      updateAuthUI();
+    }
+
+    function logout() {
+      localStorage.removeItem('uniChargeUser');
+      currentUser = null;
+      updateAuthUI();
+    }
+
+    async function loadSlots() {
+      try {
+        const res = await fetch('/api/slots');
+        allSlots = await res.json();
+        filterData();
+        checkActiveCharging();
+      } catch (e) {
+        console.error('Error loading slots:', e);
+      }
+    }
+
+    function selectFloor(code, btnElement) {
+      selectedFloorCode = code;
+      document.querySelectorAll('#floorButtons .btn').forEach(b => {
+        b.classList.remove('btn-primary', 'text-white');
+        if (b.innerText.includes('หัวเรือ')) b.classList.add('btn-outline-warning');
+        else b.classList.add('btn-outline-secondary');
+      });
+      btnElement.classList.remove('btn-outline-secondary', 'btn-outline-warning');
+      btnElement.classList.add('btn-primary', 'text-white');
+      filterData();
+    }
+
+    function filterData() {
+      const cable = document.getElementById('filterCable').value;
+      const filtered = allSlots.filter(item => {
+        let matchFloor = false;
+        if (selectedFloorCode === 'ALL') matchFloor = true;
+        else if (selectedFloorCode === 'SHIP') matchFloor = item.location.includes('หัวเรือ');
+        else {
+          const flNum = selectedFloorCode.replace('FL0', '').replace('FL', '');
+          matchFloor = item.location.includes('ชั้น ' + flNum);
+        }
+        const matchCable = (cable === '') || item.cableType.includes(cable);
+        return matchFloor && matchCable;
+      });
+
+      const container = document.getElementById('slotsContainer');
+      container.innerHTML = '';
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="text-center py-5 text-muted">ไม่พบข้อมูลช่องชาร์จตามเงื่อนไขที่เลือก</div>';
+        return;
+      }
+
+      filtered.forEach(slot => {
+        const isAvailable = slot.status === 'ว่าง';
+        container.innerHTML += `
+          <div class="col-md-4 col-sm-6 mb-3">
+            <div class="card card-slot p-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold m-0 text-truncate" title="${slot.location}">ช่อง ${slot.slotNumber}</h6>
+                <span class="badge status-${slot.status}">${slot.status}</span>
+              </div>
+              <p class="small text-muted mb-1 text-truncate">${slot.location}</p>
+              <p class="small fw-bold text-primary mb-2">🔌 สายชาร์จ: ${slot.cableType}</p>
+              <button class="btn btn-sm ${isAvailable ? 'btn-primary' : 'btn-secondary'} w-100 rounded-pill" 
+                      ${!isAvailable ? 'disabled' : ''} 
+                      onclick="openBookingModal(${slot.rowIndex})">
+                ${isAvailable ? 'จองและชำระเงิน (20฿/ชม.)' : 'ไม่พร้อมใช้งาน'}
+              </button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function openBookingModal(rowIndex) {
+      if (!currentUser) {
+        alert('กรุณาเข้าสู่ระบบนักศึกษาก่อนทำรายการจอง');
+        openLogin();
+        return;
+      }
+      selectedSlotObj = allSlots.find(s => s.rowIndex === rowIndex);
+      if (!selectedSlotObj) return;
+
+      document.getElementById('modalSlotDetail').innerText = `${selectedSlotObj.location} (ช่อง ${selectedSlotObj.slotNumber})`;
+      document.getElementById('bookingForm').style.display = 'block';
+      document.getElementById('qrSection').style.display = 'none';
+      document.getElementById('chargeHours').value = '1';
+      calculateTotal();
+      bookingModalInstance.show();
+    }
+
+    function calculateTotal() {
+      const hrs = parseInt(document.getElementById('chargeHours').value);
+      document.getElementById('totalPriceText').innerText = `${hrs * 20} บาท`;
+    }
+
+    async function confirmPayment() {
+      const hrs = parseInt(document.getElementById('chargeHours').value);
+      const res = await fetch('/api/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rowIndex: selectedSlotObj.rowIndex,
+          studentEmail: currentUser.email,
+          studentName: currentUser.name,
+          hours: hrs,
+          paymentMethod: 'PromptPay QR'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById('bookingForm').style.display = 'none';
+        document.getElementById('qrSection').style.display = 'block';
+        
+        var qr = qrcode(0, 'M');
+        qr.addData(`UNICHARGE_UNLOCK_SLOT_${selectedSlotObj.slotNumber}`);
+        qr.make();
+        document.getElementById('qrcode').innerHTML = qr.createImgTag(5);
+        
+        startTimer(selectedSlotObj);
+        loadSlots();
+      } else {
+        alert(data.message);
+      }
+    }
+
+    function startTimer(slot) {
+      activeSlotRowIndex = slot.rowIndex;
+      document.getElementById('activeTimerBanner').classList.remove('d-none');
+      document.getElementById('activeSlotTitle').innerText = `ช่องชาร์จ ${slot.slotNumber}`;
+      document.getElementById('activeSlotLoc').innerText = slot.location;
+
+      secondsElapsed = 0;
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        const hrs = String(Math.floor(secondsElapsed / 3600)).padStart(2, '0');
+        const mins = String(Math.floor((secondsElapsed % 3600) / 60)).padStart(2, '0');
+        const secs = String(secondsElapsed % 60).padStart(2, '0');
+        document.getElementById('activeTimer').innerText = `${hrs}:${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function checkActiveCharging() {
+      if (!currentUser) return;
+      const myActive = allSlots.find(s => s.bookedEmail === currentUser.email && s.status === 'มีผู้จองแล้ว');
+      if (myActive && !activeSlotRowIndex) {
+        startTimer(myActive);
+      }
+    }
+
+    async function finishCharging() {
+      if (!confirm('ยืนยันการเสร็จสิ้นชาร์จและคืนช่องชาร์จ?')) return;
+      const res = await fetch('/api/release', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rowIndex: activeSlotRowIndex })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('คืนช่องชาร์จเรียบร้อย ขอบคุณที่ใช้บริการ');
+        document.getElementById('activeTimerBanner').classList.add('d-none');
+        if (timerInterval) clearInterval(timerInterval);
+        activeSlotRowIndex = null;
+        loadSlots();
+      }
+    }
+
+    async function openHistoryModal() {
+      if (!currentUser) return openLogin();
+      const res = await fetch(`/api/history?email=${encodeURIComponent(currentUser.email)}`);
+      const history = await res.json();
+      const tbody = document.getElementById('historyTableBody');
+      tbody.innerHTML = '';
+
+      if (history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">ยังไม่มีประวัติการใช้งาน</td></tr>';
+      } else {
+        history.forEach(h => {
+          tbody.innerHTML += `
+            <tr>
+              <td class="fw-bold">ช่อง ${h.slotNumber}</td>
+              <td class="small">${h.location}</td>
+              <td class="small">${h.bookTime}</td>
+              <td>${h.hours} ชม.</td>
+              <td class="fw-bold text-success">${h.amount} ฿</td>
+              <td><span class="badge ${h.status==='กำลังใช้งาน'?'bg-warning text-dark':'bg-secondary'}">${h.status}</span></td>
+            </tr>
+          `;
+        });
+      }
+      historyModalInstance.show();
+    }
+  </script>
+</body>
+</html>
